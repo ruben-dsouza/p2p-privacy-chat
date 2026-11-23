@@ -22,6 +22,7 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { ready, identity, createIdentity, restoreIdentity, storageError } = useMessenger();
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [backupText, setBackupText] = useState('');
   const [passphrase, setPassphrase] = useState('');
   const [importOpen, setImportOpen] = useState(false);
@@ -34,13 +35,13 @@ export default function OnboardingScreen() {
 
   const create = async () => {
     if (name.trim().length < 2) {
-      setError('Choose a name with at least two characters.');
+      setError('Choose a display name with at least two characters.');
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await createIdentity(name);
+      await createIdentity(name, username.trim() || undefined);
       router.replace('/(tabs)');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Identity could not be created.');
@@ -105,7 +106,7 @@ export default function OnboardingScreen() {
           Your messages.{'\n'}Your keys. Your device.
         </Text>
         <Text style={[styles.body, { color: colors.mutedForeground }]}>
-          No phone number. No central account. Create a local identity, then connect directly with people you trust.
+          No phone number. No central server. Pick your @username and connect directly with friends.
         </Text>
 
         {!importOpen ? (
@@ -118,6 +119,22 @@ export default function OnboardingScreen() {
               placeholderTextColor={colors.mutedForeground}
               autoCapitalize="words"
               maxLength={48}
+              style={[
+                styles.input,
+                { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            />
+            <Text style={[styles.label, { color: colors.mutedForeground, marginTop: 4 }]}>
+              @USERNAME (OPTIONAL)
+            </Text>
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              placeholder="e.g. ruben.dsouza (auto-generated if blank)"
+              placeholderTextColor={colors.mutedForeground}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={24}
               style={[
                 styles.input,
                 { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border },
@@ -198,7 +215,7 @@ export default function OnboardingScreen() {
         <View style={[styles.privacyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.privacyTitle, { color: colors.foreground }]}>Private by design</Text>
           <Text style={[styles.privacyCopy, { color: colors.mutedForeground }]}>
-            Your identity and message history stay on this device. Public signaling helps peers find each other; message content is encrypted for the recipient.
+            Your identity and message history stay on this device. Searchable @usernames use signed public keys so peers connect automatically without servers.
           </Text>
         </View>
       </ScrollView>

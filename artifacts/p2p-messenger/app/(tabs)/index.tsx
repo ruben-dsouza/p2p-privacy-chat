@@ -414,7 +414,7 @@ export default function ChatsScreen() {
             <Text style={[styles.emptyCopy, { color: colors.mutedForeground }]}>
               {search || filter !== 'all'
                 ? 'Try clearing your search or switching the conversation filter above.'
-                : 'Share your QR invite or scan a friend’s code. Messages travel directly device-to-device with zero servers.'}
+                : 'Search a friend’s @username in Contacts to start an end-to-end encrypted chat with zero servers.'}
             </Text>
             {!search && filter === 'all' ? (
               <Pressable
@@ -428,7 +428,7 @@ export default function ChatsScreen() {
                     { color: colors.primaryForeground },
                   ]}
                 >
-                  Add or Scan Contact
+                  Find People by @username
                 </Text>
               </Pressable>
             ) : null}

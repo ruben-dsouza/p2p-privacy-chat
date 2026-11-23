@@ -15,12 +15,11 @@ import { Feather, MaterialCommunityIcons } from '@/components/AppIcons';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ConnectionBanner from '@/components/ConnectionBanner';
-import InviteQr from '@/components/InviteQr';
 import { useColors, useThemeSettings } from '@/hooks/useColors';
 import { THEME_OPTIONS } from '@/constants/colors';
 import { useMessenger } from '@/context/MessengerContext';
 import { decryptIdentityBackup, encryptIdentityBackup } from '@/lib/crypto';
-import { makeInvite } from '@/lib/encoding';
+import { resolveIdentityUsername } from '@/lib/crypto';
 import { playNotificationChime } from '@/lib/notifications';
 
 type BackupMode = 'export' | 'import' | null;
@@ -40,6 +39,7 @@ export default function SettingsScreen() {
     updatePreferences,
     requestNotifications,
     reconnectAll,
+    updateUsername,
     restoreIdentity,
     wipe,
   } = useMessenger();
@@ -50,9 +50,10 @@ export default function SettingsScreen() {
   const [resultText, setResultText] = useState('');
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const [showQr, setShowQr] = useState(false);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
 
-  const invite = identity ? makeInvite(identity) : '';
+  const myUsername = identity ? resolveIdentityUsername(identity) : "";
   const connectedCount = contacts.filter(
     (c) => connectionStatus[c.id] === 'connected',
   ).length;
@@ -260,68 +261,104 @@ export default function SettingsScreen() {
               </Text>
             </View>
 
-            <View style={styles.identityActionsRow}>
-              <Pressable
-                onPress={() => void copy(invite, 'invite')}
-                style={[
-                  styles.identityActionBtn,
-                  { backgroundColor: colors.primary },
-                ]}
-              >
-                <Feather
-                  name={copied === 'invite' ? 'check' : 'link'}
-                  size={15}
-                  color={colors.primaryForeground}
-                />
-                <Text
-                  style={[
-                    styles.identityActionText,
-                    { color: colors.primaryForeground },
-                  ]}
-                >
-                  {copied === 'invite' ? 'Invite Copied' : 'Copy Invite Link'}
+            <View
+              style={[
+                styles.keyBox,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.keyHeaderRow}>
+                <Text style={[styles.keyLabel, { color: colors.mutedForeground }]}>
+                  YOUR @USERNAME HANDLE
                 </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setShowQr((prev) => !prev)}
-                style={[
-                  styles.identityActionBtn,
-                  {
-                    backgroundColor: colors.secondary,
-                    borderColor: colors.border,
-                    borderWidth: 1,
-                  },
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name="qrcode"
-                  size={16}
-                  color={colors.primary}
-                />
-                <Text
-                  style={[
-                    styles.identityActionText,
-                    { color: colors.foreground },
-                  ]}
-                >
-                  {showQr ? 'Hide QR' : 'Show QR Code'}
-                </Text>
-              </Pressable>
-            </View>
-
-            {showQr ? (
-              <View style={[styles.qrBlock, { borderColor: colors.border }]}>
-                <InviteQr value={invite} size={186} />
-                <Text style={[styles.qrCopy, { color: colors.mutedForeground }]}>
-                  Have a trusted contact scan this QR code to add your public
-                  keys directly.
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <Pressable
+                    onPress={() => {
+                      setUsernameDraft(myUsername);
+                      setEditingUsername((prev) => !prev);
+                    }}
+                    style={styles.copyInlineBtn}
+                  >
+                    <Feather name="edit-2" size={12} color={colors.primary} />
+                    <Text style={[styles.copyInlineText, { color: colors.primary }]}>
+                      {editingUsername ? "Cancel" : "Edit"}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void copy("@" + myUsername, "username")}
+                    style={styles.copyInlineBtn}
+                  >
+                    <Feather
+                      name={copied === "username" ? "check" : "copy"}
+                      size={12}
+                      color={colors.primary}
+                    />
+                    <Text style={[styles.copyInlineText, { color: colors.primary }]}>
+                      {copied === "username" ? "Copied" : "Copy @username"}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
-            ) : null}
+
+              {editingUsername ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
+                  <TextInput
+                    value={usernameDraft}
+                    onChangeText={setUsernameDraft}
+                    placeholder="your.username"
+                    placeholderTextColor={colors.mutedForeground}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    style={{
+                      flex: 1,
+                      height: 38,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      backgroundColor: colors.card,
+                      color: colors.foreground,
+                      paddingHorizontal: 10,
+                      fontSize: 13,
+                      fontWeight: "700",
+                    }}
+                  />
+                  <Pressable
+                    onPress={async () => {
+                      try {
+                        await updateUsername(usernameDraft);
+                        setEditingUsername(false);
+                      } catch (e) {
+                        Alert.alert("Invalid username", e instanceof Error ? e.message : "Try another handle.");
+                      }
+                    }}
+                    style={{
+                      height: 38,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      backgroundColor: colors.primary,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ color: colors.primaryForeground, fontSize: 12, fontWeight: "800" }}>
+                      Save
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text
+                  selectable
+                  style={[styles.keyText, { color: colors.primary, fontSize: 14, fontWeight: "800" }]}
+                >
+                  @{myUsername}
+                </Text>
+              )}
+            </View>
           </View>
         ) : null}
-
 
         <Text style={[styles.section, { color: colors.mutedForeground }]}>
           APPEARANCE & THEME

@@ -35,6 +35,8 @@ import {
   wipeLocalData,
 } from '@/lib/storage';
 import { P2PManager } from '@/lib/transport';
+import { UsernameDirectory } from '@/lib/directory';
+import { normalizeUsername, resolveIdentityUsername } from '@/lib/crypto';
 import type {
   ActiveCall,
   AppPreferences,
@@ -43,6 +45,7 @@ import type {
   ChatMessage,
   ConnectionStatus,
   Contact,
+  DirectoryProfile,
   EncryptedEnvelope,
   InAppNotification,
   LocalIdentity,
@@ -77,7 +80,10 @@ interface MessengerContextValue {
   requestNotifications(): Promise<boolean>;
   reconnectAll(): Promise<void>;
   reconnectContact(contactId: string): Promise<void>;
-  createIdentity(displayName: string): Promise<void>;
+  directoryProfiles: DirectoryProfile[];
+  refreshDirectory(): void;
+  createIdentity(displayName: string, username?: string): Promise<void>;
+  updateUsername(username: string): Promise<void>;
   restoreIdentity(identity: LocalIdentity): Promise<void>;
   addContact(identity: PublicIdentity): Promise<Contact>;
   removeContact(contactId: string): Promise<void>;
@@ -151,6 +157,8 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
   const [inAppBanner, setInAppBanner] = useState<InAppNotification | null>(null);
 
   const managerRef = useRef<P2PManager | null>(null);
+  const directoryRef = useRef<UsernameDirectory | null>(null);
+  const [directoryProfiles, setDirectoryProfiles] = useState<DirectoryProfile[]>([]);
   const identityRef = useRef<LocalIdentity | null>(null);
   const contactsRef = useRef<Contact[]>([]);
   const preferencesRef = useRef<AppPreferences>(DEFAULT_PREFERENCES);
@@ -512,9 +520,36 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
       }));
     }
     void manager.start(contactsRef.current);
+
+    const directory = new UsernameDirectory(identity, {
+      onProfilesUpdated(profiles) {
+        setDirectoryProfiles(profiles);
+      },
+      onIncomingKnock(sender) {
+        if (sender.signPublic === identityRef.current?.signPublic) return;
+        const exists = contactsRef.current.some((c) => c.id === sender.signPublic);
+        if (exists) return;
+        const contact = contactFromInvite(sender);
+        void saveContact(contact).then(async () => {
+          const nextContacts = [...contactsRef.current, contact];
+          contactsRef.current = nextContacts;
+          setContacts(nextContacts);
+          setConnectionStatus((current) => ({
+            ...current,
+            [contact.id]: 'searching',
+          }));
+          await managerRef.current?.syncContacts(nextContacts);
+        });
+      },
+    });
+    directoryRef.current = directory;
+    void directory.start();
+
     return () => {
       if (managerRef.current === manager) managerRef.current = null;
       void manager.stop();
+      if (directoryRef.current === directory) directoryRef.current = null;
+      void directory.stop();
     };
   }, [ready, identity?.signPublic]);
 
@@ -578,13 +613,33 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
-  const createIdentity = useCallback(async (displayName: string) => {
-    const nextIdentity = createLocalIdentity(displayName);
+  const createIdentity = useCallback(async (displayName: string, username?: string) => {
+    const nextIdentity = createLocalIdentity(displayName, username);
     await saveIdentity(nextIdentity);
     setIdentity(nextIdentity);
     void requestNotificationPermission().then(() => {
       setNotificationPermission(getNotificationPermissionState());
     });
+  }, []);
+
+  const updateUsername = useCallback(async (rawUsername: string) => {
+    const current = identityRef.current;
+    if (!current) return;
+    const normalized = normalizeUsername(rawUsername, current.signPublic);
+    if (normalized.length < 3) {
+      throw new Error("Username must be at least 3 characters.");
+    }
+    const updated: LocalIdentity = {
+      ...current,
+      username: normalized,
+    };
+    await saveIdentity(updated);
+    setIdentity(updated);
+    directoryRef.current?.updateIdentity(updated);
+  }, []);
+
+  const refreshDirectory = useCallback(() => {
+    directoryRef.current?.broadcastProfile();
   }, []);
 
   const restoreIdentity = useCallback(async (nextIdentity: LocalIdentity) => {
@@ -594,10 +649,15 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
 
   const addContact = useCallback(async (publicIdentity: PublicIdentity) => {
     if (publicIdentity.signPublic === identityRef.current?.signPublic) {
-      throw new Error('That is your own invite.');
+      throw new Error("That is your own @username.");
     }
-    const contact = contactFromInvite(publicIdentity);
+    const normalizedIdentity: PublicIdentity = {
+      ...publicIdentity,
+      username: resolveIdentityUsername(publicIdentity),
+    };
+    const contact = contactFromInvite(normalizedIdentity);
     const existing = contactsRef.current.find((item) => item.id === contact.id);
+    directoryRef.current?.sendKnock(contact.signPublic);
     if (existing) {
       return existing;
     }
@@ -816,7 +876,10 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
       requestNotifications,
       reconnectAll,
       reconnectContact,
+      directoryProfiles,
+      refreshDirectory,
       createIdentity,
+      updateUsername,
       restoreIdentity,
       addContact,
       removeContact,
@@ -856,7 +919,10 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
       requestNotifications,
       reconnectAll,
       reconnectContact,
+      directoryProfiles,
+      refreshDirectory,
       createIdentity,
+      updateUsername,
       restoreIdentity,
       addContact,
       removeContact,

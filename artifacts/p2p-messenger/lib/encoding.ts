@@ -157,6 +157,7 @@ export function parseInvite(value: string): PublicIdentity {
 export function contactFromInvite(identity: PublicIdentity): Contact {
   return {
     ...identity,
+    username: identity.username,
     id: identity.signPublic,
     addedAt: Date.now(),
   };

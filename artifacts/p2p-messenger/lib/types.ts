@@ -2,6 +2,7 @@ export interface PublicIdentity {
   signPublic: string;
   boxPublic: string;
   displayName: string;
+  username?: string;
 }
 
 export interface LocalIdentity extends PublicIdentity {
@@ -13,6 +14,12 @@ export interface LocalIdentity extends PublicIdentity {
 export interface Contact extends PublicIdentity {
   id: string;
   addedAt: number;
+}
+
+export interface DirectoryProfile extends PublicIdentity {
+  username: string;
+  updatedAt: number;
+  lastSeenAt: number;
 }
 
 export interface MessageContent {

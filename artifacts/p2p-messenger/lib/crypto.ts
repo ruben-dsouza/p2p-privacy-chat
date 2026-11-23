@@ -51,15 +51,62 @@ export function randomId(): string {
   return toBase64Url(nacl.randomBytes(16));
 }
 
-export function createLocalIdentity(displayName: string): LocalIdentity {
+
+export function normalizeUsername(raw: string, signPublic?: string): string {
+  const cleaned = raw
+    .trim()
+    .replace(/^@+/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, "")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 24);
+  if (cleaned.length >= 3) {
+    return cleaned;
+  }
+  const base = cleaned || "user";
+  const tag = (signPublic ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 4) || "node";
+  return `${base}.${tag}`.slice(0, 24);
+}
+
+export function deriveDefaultUsername(displayName: string, signPublic: string): string {
+  const slug = displayName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ".")
+    .replace(/^.+|.+$/g, "")
+    .slice(0, 16) || "peer";
+  const tag = signPublic
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 4) || "0000";
+  return `${slug}.${tag}`;
+}
+
+export function resolveIdentityUsername(identity: Pick<PublicIdentity, "displayName" | "signPublic" | "username">): string {
+  if (identity.username && identity.username.trim().length >= 3) {
+    return normalizeUsername(identity.username, identity.signPublic);
+  }
+  return deriveDefaultUsername(identity.displayName, identity.signPublic);
+}
+
+export function createLocalIdentity(displayName: string, customUsername?: string): LocalIdentity {
   const signing = nacl.sign.keyPair();
   const encryption = nacl.box.keyPair();
+  const signPublic = encodeBase64(signing.publicKey);
+  const cleanName = displayName.trim().slice(0, 48);
+  const username = customUsername && customUsername.trim().length >= 3
+    ? normalizeUsername(customUsername, signPublic)
+    : deriveDefaultUsername(cleanName, signPublic);
   return {
-    signPublic: encodeBase64(signing.publicKey),
+    signPublic,
     signSecret: encodeBase64(signing.secretKey),
     boxPublic: encodeBase64(encryption.publicKey),
     boxSecret: encodeBase64(encryption.secretKey),
-    displayName: displayName.trim().slice(0, 48),
+    displayName: cleanName,
+    username,
     createdAt: Date.now(),
   };
 }
