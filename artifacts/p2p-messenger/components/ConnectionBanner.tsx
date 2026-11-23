@@ -93,7 +93,7 @@ export default function ConnectionBanner({
       pillTextColor = colors.primaryForeground;
       statusPillText = 'ONLINE';
       title = 'Device Online · P2P Node Ready';
-      subtitle = 'Add a contact via QR code or invite link to start chatting';
+      subtitle = 'Search a friend’s @username in Contacts to start chatting';
     } else if (connectedPeersCount > 0) {
       dotColor = colors.primary;
       badgeBg = colors.accent;

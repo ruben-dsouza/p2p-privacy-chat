@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -45,6 +45,13 @@ export default function ContactsScreen() {
   const [addingId, setAddingId] = useState<string | null>(null);
 
   const myUsername = identity ? resolveIdentityUsername(identity) : '';
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      refreshDirectory(search);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search, refreshDirectory]);
   const query = search.trim().replace(/^@+/, '').toLowerCase();
 
   const filteredContacts = useMemo(() => {

@@ -81,7 +81,7 @@ interface MessengerContextValue {
   reconnectAll(): Promise<void>;
   reconnectContact(contactId: string): Promise<void>;
   directoryProfiles: DirectoryProfile[];
-  refreshDirectory(): void;
+  refreshDirectory(query?: string): void;
   createIdentity(displayName: string, username?: string): Promise<void>;
   updateUsername(username: string): Promise<void>;
   restoreIdentity(identity: LocalIdentity): Promise<void>;
@@ -638,8 +638,8 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
     directoryRef.current?.updateIdentity(updated);
   }, []);
 
-  const refreshDirectory = useCallback(() => {
-    directoryRef.current?.broadcastProfile();
+  const refreshDirectory = useCallback((query?: string) => {
+    directoryRef.current?.queryRelays(query);
   }, []);
 
   const restoreIdentity = useCallback(async (nextIdentity: LocalIdentity) => {
@@ -657,7 +657,7 @@ export function MessengerProvider({ children }: { children: React.ReactNode }) {
     };
     const contact = contactFromInvite(normalizedIdentity);
     const existing = contactsRef.current.find((item) => item.id === contact.id);
-    directoryRef.current?.sendKnock(contact.signPublic);
+    void directoryRef.current?.sendKnock(contact.signPublic);
     if (existing) {
       return existing;
     }
